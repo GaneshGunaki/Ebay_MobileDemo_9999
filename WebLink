@@ -1,0 +1,199 @@
+Building and using an Object Repository in Selenium Webdriver:
+https://www.ontestautomation.com/building-and-using-an-object-repository-in-selenium-webdriver/
+
+
+
+
+package pom.desktop.core;
+
+import java.awt.Desktop;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.logging.LogManager;
+
+import org.apache.commons.io.FileUtils;
+import org.openqa.selenium.By;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
+import com.relevantcodes.extentreports.DisplayOrder;
+import com.relevantcodes.extentreports.ExtentReports;
+import com.relevantcodes.extentreports.ExtentTest;
+import com.relevantcodes.extentreports.LogStatus;
+
+/**
+ * Used to generate two extent reports, organized in two ways. one is per Day and another as per Scenario.
+ */
+public class Reporter {
+	static List<File> files=new ArrayList<File>();
+	 ExtentReports extDayReport;
+	 ExtentTest extDayTest;
+	 ExtentReports extScenarioReport;
+	 ExtentTest extScenarioTest;
+	 String reportDayFileName;
+	 String reportDayFolder;
+	 String reportScenarioFileName;
+	 String reportScenarioFolder;
+	protected  WebDriver driver;
+	protected ConfigFileReader configReader;
+	
+	/**
+	 * Constructor to initialize the reporter
+	 */
+	Reporter(String scenario,WebDriver driver)
+	{
+		this.driver=driver;
+		String day = new SimpleDateFormat("MMM dd").format(new Date());
+		String timestamp = new SimpleDateFormat("yyyy-MM-dd_hh_mm_ss").format(new Date());	
+		configReader=new ConfigFileReader();	
+		reportDayFileName=(configReader.getProperty("extent.report.path")+"\\DayProjection\\"+day+"\\"+scenario+"\\"+scenario+"_"+timestamp+"\\"+scenario+"_"+timestamp+".html");
+		reportDayFolder=(configReader.getProperty("extent.report.path")+"\\DayProjection\\"+day+"\\"+scenario+"\\"+scenario+"_"+timestamp);
+		
+		reportScenarioFileName=(configReader.getProperty("extent.report.path")+"\\ScenarioProjection\\"+scenario+"\\"+day+"\\"+scenario+"_"+timestamp+"\\"+scenario+"_"+timestamp+".html");
+		reportScenarioFolder=(configReader.getProperty("extent.report.path")+"\\ScenarioProjection\\"+scenario+"\\"+day+"\\"+scenario+"_"+timestamp);
+		
+		File extentDayReport=new File(reportDayFileName);
+		File extentScenarioReport=new File(reportScenarioFileName);
+		
+		extentDayReport.getParentFile().mkdirs();
+		extentScenarioReport.getParentFile().mkdirs();
+		 try {
+			 extentDayReport.createNewFile();
+			 files.add(extentDayReport);
+			 extentScenarioReport.createNewFile();
+				FileUtils.copyFile(new File(System.getProperty("user.dir")+"/resources/Logo.png"),new File(reportDayFolder+"\\cache\\Logo.png"));
+				System.out.println("Report file created @ "+reportDayFileName);
+				FileUtils.copyFile(new File(System.getProperty("user.dir")+"/resources/Logo.png"),new File(reportScenarioFolder+"\\cache\\Logo.png"));
+				System.out.println("Report file created @ "+reportScenarioFileName);
+			} catch (Exception e) {
+				System.err.println("Your scenario name might be having special characters not supporting folder names ...................");
+				e.printStackTrace();
+			}
+		 LogManager.getLogManager().reset();
+		 extDayReport = new ExtentReports(extentDayReport.getAbsolutePath(),false,DisplayOrder.OLDEST_FIRST);
+		 extScenarioReport = new ExtentReports(extentScenarioReport.getAbsolutePath(),false,DisplayOrder.OLDEST_FIRST);	
+		 
+		 String exconfigfile = System.getProperty("user.dir")+ "\\resources\\ExtentReportsConfig.xml";			
+		 extDayReport.loadConfig(new File(exconfigfile));		
+		 extScenarioReport.loadConfig(new File(exconfigfile));
+		System.out.println("All set for Reporting");
+	}
+	
+	/**
+	 * To mark the start of TC in extent report
+	 */	
+	public void startTC(String description)
+	{
+		extDayTest=extDayReport.startTest(description);
+		extScenarioTest=extScenarioReport.startTest(description);
+	}
+	
+	/**
+	 * To mark the end of TC in extent report
+	 */	
+	public void endTC()
+	{
+		extDayReport.endTest(extDayTest);
+		extScenarioReport.endTest(extScenarioTest);
+		suspend();
+	}
+	
+	/**
+	 * To get screenshot of the current browser page
+	 */	
+	public String getScreenShotPath()
+	{
+		String uuid = java.util.UUID.randomUUID().toString();
+		File scrFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+		try{FileUtils.copyFile(scrFile,new File(reportScenarioFolder + "/cache/" + uuid + ".jpg"));}catch(Exception e){e.printStackTrace();}
+		try{FileUtils.copyFile(scrFile,new File(reportDayFolder + "/cache/" + uuid + ".jpg"));}catch(Exception e){e.printStackTrace();}
+		return "/cache/" + uuid + ".jpg";
+	}
+	
+	/**
+	 *  Reporting for failed TC
+	 */	
+	public void failed(String description,Exception e)
+	{
+		String msg=e.getMessage();
+		if(msg.contains("Timed out after 10 seconds waiting for visibility"))
+			msg="Timed out after 10 seconds waiting for visibility";
+		extDayTest.log(LogStatus.FAIL, description+"<br/>Reason: <br/>"+msg+"<br/>Screenshot: <br/>"+extDayTest.addScreenCapture(reportDayFolder+getScreenShotPath()));
+		extScenarioTest.log(LogStatus.FAIL, description+"<br/>Reason: <br/>"+msg+"<br/>Screenshot: <br/>"+extScenarioTest.addScreenCapture(reportScenarioFolder+getScreenShotPath()));
+	}
+	
+	/**
+	 *  Overloaded method for reporting of failed TC
+	 */	
+	public void failed(String description,Exception e,By locator)
+	{
+		String msg=e.getMessage();
+		if(msg.contains("Timed out after 10 seconds waiting for visibility"))
+			msg="Timed out after 10 seconds waiting for visibility";
+		extDayTest.log(LogStatus.FAIL, description+"<br/>Ref: ["+locator+"<br/>Reason: <br/>"+msg+"<br/>Screenshot: <br/>"+extDayTest.addScreenCapture(reportDayFolder+getScreenShotPath()));
+		extScenarioTest.log(LogStatus.FAIL, description+"<br/>Ref: ["+locator+"<br/>Reason: <br/>"+msg+"<br/>Screenshot: <br/>"+extScenarioTest.addScreenCapture(reportScenarioFolder+getScreenShotPath()));
+	}
+	
+	/**
+	 *  Reporting for passed TC, including a screenshot.
+	 */
+	public void passedWithShot(String description)
+	{
+		extDayTest.log(LogStatus.PASS, description+extDayTest.addScreenCapture(reportDayFolder+getScreenShotPath()));
+		extScenarioTest.log(LogStatus.PASS, description+extScenarioTest.addScreenCapture(reportScenarioFolder+getScreenShotPath()));
+	}
+	
+	/**
+	 *  Overloaded method for reporting of passed TC
+	 */
+	public void passed(String description)
+	{
+		extDayTest.log(LogStatus.PASS, description);
+		extScenarioTest.log(LogStatus.PASS, description);
+	}
+	
+	/**
+	 *  Overloaded method for reporting of passed TC
+	 */
+	public void passed(String description,By locator)
+	{
+		extDayTest.log(LogStatus.PASS, description+"<br/>Ref: ["+locator);
+		extScenarioTest.log(LogStatus.PASS, description+"<br/>Ref: ["+locator);
+	}
+	
+	/**
+	 *  Reporting for skipped TC
+	 */
+	public void skipped(String description)
+	{
+		extDayTest.log(LogStatus.SKIP, description);
+		extScenarioTest.log(LogStatus.SKIP, description);
+	}
+	
+	/**
+	 *  For marking the end of TC in extent report
+	 */
+	public void suspend()
+	{
+		extDayReport.flush();
+		extScenarioReport.flush();
+	}
+	
+	/**
+	 *  To launch browser & open report html files after execution. Implementation is a further enhancement
+	 */
+	public void quit()
+	{
+		for (File file: files) {
+			try {
+				Desktop.getDesktop().browse(file.toURI());
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+}
